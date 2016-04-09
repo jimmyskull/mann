@@ -1,7 +1,9 @@
 
 #include <catch.hpp>
 
+#include <iostream>
 #include <sstream>
+#include <vector>
 
 #include <mann.h>
 
@@ -27,5 +29,17 @@ TEST_CASE("Point from stream", "[Point]") {
   input >> p2;
   CHECK(p2[0] == Approx(4.0));
   CHECK(p2[1] == Approx(2.0));
+}
 
+TEST_CASE("Array of Points", "[Point]") {
+  using mann::Point;
+
+  std::vector<Point<double, 2>> points;
+
+  std::istringstream input{"1.5 3.2\n4 2\n0 1\n1 0\n"};
+
+  while (!input.eof())
+    if (input.peek() != EOF) points.emplace_back(input);
+
+  CHECK(points.size() == 4);
 }
