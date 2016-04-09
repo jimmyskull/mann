@@ -1,0 +1,4 @@
+
+add_executable(examples_simple_ann simple.cpp)
+target_link_libraries(examples_simple_ann mann_lib)
+set_target_properties(examples_simple_ann PROPERTIES OUTPUT_NAME simple)
