@@ -49,6 +49,8 @@ class Point {
 
   const ValueT& operator[](std::size_t index) const { return elements_[index]; }
 
+  const ValueT& at(std::size_t index) const { return elements_[index]; }
+
   friend std::istream& operator>>(std::istream& is, Point& p) {
     std::string line;
     if (!getline(is, line)) {
@@ -73,9 +75,18 @@ class Point {
   }
 };
 
+template<typename T>
+class Array {
+ public:
+
+};
+
 namespace detail {
 
-class OrthogonalRectangle {};
+class OrthogonalRectangle {
+ public:
+  void SmallestEnclosingRectangle();
+};
 
 class KDTreeNode {};
 
@@ -94,8 +105,6 @@ class KDTree {
 
  private:
   void SkeletonTree() {
-    indexes_.resize(points_.size());
-    std::iota(indexes_.begin(), indexes_.end(), 0);
   }
 
   unsigned dim() const { return points_.dimension; }
@@ -106,7 +115,6 @@ class KDTree {
   std::unique_ptr<Node> root_;
   std::weak_ptr<Node> bounding_box_lower_left_;
   std::weak_ptr<Node> bounding_box_upper_right_;
-  std::vector<unsigned> indexes_;
 };
 
 }  // namespace mann
