@@ -1,7 +1,6 @@
 
 #include <catch.hpp>
 
-#include <iostream>
 #include <sstream>
 #include <vector>
 
@@ -10,7 +9,7 @@
 TEST_CASE("Point init", "[Point]") {
   using mann::Point;
 
-  auto p = Point<double, 2>{1.0, 2.0};
+  auto p = Point<>{1.0, 2.0};
   CHECK(p[0] == Approx(1.0));
   CHECK(p[1] == Approx(2.0));
 }

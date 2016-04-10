@@ -1,13 +1,17 @@
 // Copyright © 2016  Paulo Urio and Filipe Verri
+// Copyright © 1997–2010  University of Maryland and Sunil Arya and David Mount.
+// All Rights Reserved.
 #ifndef MANN_H_
 #define MANN_H_
 
 #include <array>
 #include <istream>
+#include <memory>
+#include <numeric>
 #include <sstream>
-#include <initializer_list>
 #include <string>
 #include <type_traits>
+#include <vector>
 
 namespace mann {
 
@@ -22,6 +26,8 @@ class Point {
   std::array<ValueT, Dim> elements_;
 
  public:
+  static const unsigned dimension = Dim;
+
   ~Point() = default;
 
   Point() = default;
@@ -65,6 +71,42 @@ class Point {
     os << ")";
     return os;
   }
+};
+
+namespace detail {
+
+class OrthogonalRectangle {};
+
+class KDTreeNode {};
+
+}  // namespace detail
+
+template <typename PointsArrayT>
+class KDTree {
+ private:
+  using Node = detail::KDTreeNode;
+
+ public:
+  KDTree(const PointsArrayT& points, unsigned bucket_size = 1)
+      : points_(points), bucket_size_(bucket_size) {
+    if (points_.empty()) return;
+  }
+
+ private:
+  void SkeletonTree() {
+    indexes_.resize(points_.size());
+    std::iota(indexes_.begin(), indexes_.end(), 0);
+  }
+
+  unsigned dim() const { return points_.dimension; }
+  unsigned bucket_size() const { return bucket_size_; }
+
+  const PointsArrayT& points_;
+  const unsigned bucket_size_;
+  std::unique_ptr<Node> root_;
+  std::weak_ptr<Node> bounding_box_lower_left_;
+  std::weak_ptr<Node> bounding_box_upper_right_;
+  std::vector<unsigned> indexes_;
 };
 
 }  // namespace mann
