@@ -45,12 +45,13 @@ R"(0.0902484	-0.207129
 TEST_CASE("KDTree", "[KDTree]") {
   using mann::Point;
   using mann::KDTree;
-  std::vector<Point<double, 2>> points;
+  using Array = std::vector<Point<double, 2>>;
+  Array points;
 
   while (!input_points.eof())
     if (input_points.peek() != EOF) points.emplace_back(input_points);
 
-  auto tree = KDTree<>{points};
+  auto tree = KDTree<Array>{points};
 }
 
 

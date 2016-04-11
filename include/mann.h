@@ -11,7 +11,10 @@
 #include <sstream>
 #include <string>
 #include <type_traits>
+#include <utility>
 #include <vector>
+
+#include <iostream>
 
 namespace mann {
 
@@ -23,14 +26,15 @@ struct fst {
 template <typename ValueT = double, unsigned Dim = 2>
 class Point {
  private:
-  std::array<ValueT, Dim> elements_;
+  using PointType = std::array<ValueT, Dim>;
+  std::unique_ptr<PointType> elements_ = std::make_unique<PointType>();
 
  public:
   static const unsigned dimension = Dim;
 
   ~Point() = default;
 
-  Point() = default;
+  Point(){};
   Point(const Point&) = default;
   Point(Point&&) = default;
   auto operator=(Point&) -> Point& = default;
@@ -38,18 +42,15 @@ class Point {
 
   explicit Point(std::istream& is) { is >> *this; }
 
-  template <
-      typename... T,
-      typename = typename fst<void, typename std::enable_if<std::is_convertible<
-                                        T, ValueT>::value>::type...>::type>
-  Point(T&&... args)
-      : elements_{{std::forward<T>(args)...}} {
-    static_assert(sizeof...(T) == Dim, "Invalid number of dimensions.");
+  ValueT& operator[](std::size_t index) { return elements_->operator[](index); }
+
+  const ValueT& operator[](std::size_t index) const {
+    return elements_->operator[](index);
   }
 
-  const ValueT& operator[](std::size_t index) const { return elements_[index]; }
+  const ValueT& at(std::size_t index) const { return elements_->at(index); }
 
-  const ValueT& at(std::size_t index) const { return elements_[index]; }
+  typename PointType::size_type size() const { return elements_->size(); }
 
   friend std::istream& operator>>(std::istream& is, Point& p) {
     std::string line;
@@ -57,7 +58,7 @@ class Point {
       std::runtime_error("Empty stream");
     }
     std::istringstream iss(line);
-    for (auto& e : p.elements_) {
+    for (auto& e : *p.elements_) {
       iss >> e;
     }
     return is;
@@ -65,7 +66,7 @@ class Point {
 
   friend std::ostream& operator<<(std::ostream& os, Point& p) {
     bool beginning = true;
-    for (auto& e : p.elements_) {
+    for (auto& e : *p.elements_) {
       os << (beginning ? '(' : ' ');
       os << e;
       beginning = false;
@@ -75,17 +76,27 @@ class Point {
   }
 };
 
-template<typename T>
-class Array {
- public:
-
-};
-
 namespace detail {
 
-class OrthogonalRectangle {
+template <typename PointT>
+class OrthoRect {
  public:
-  void SmallestEnclosingRectangle();
+  template <typename ArrayT>
+  void SmallestEnclosingRect(const ArrayT& arr) {
+    if (arr.empty()) return;
+    auto dim = arr[0].size();
+    for (decltype(dim) i = 0; i < dim; ++i) {
+      auto r = std::minmax_element(
+          arr.begin(), arr.end(),
+          [i](const auto& a, const auto& b) -> bool { return a[i] < b[i]; });
+      lower_left_[i] = r.first->at(i);
+      upper_right_[i] = r.second->at(i);
+    }
+  }
+
+ private:
+  PointT lower_left_;
+  PointT upper_right_;
 };
 
 class KDTreeNode {};
@@ -101,10 +112,12 @@ class KDTree {
   KDTree(const PointsArrayT& points, unsigned bucket_size = 1)
       : points_(points), bucket_size_(bucket_size) {
     if (points_.empty()) return;
+    SkeletonTree();
   }
 
  private:
   void SkeletonTree() {
+    bounds_.SmallestEnclosingRect(points_);
   }
 
   unsigned dim() const { return points_.dimension; }
@@ -113,8 +126,7 @@ class KDTree {
   const PointsArrayT& points_;
   const unsigned bucket_size_;
   std::unique_ptr<Node> root_;
-  std::weak_ptr<Node> bounding_box_lower_left_;
-  std::weak_ptr<Node> bounding_box_upper_right_;
+  detail::OrthoRect<typename PointsArrayT::value_type> bounds_;
 };
 
 }  // namespace mann
