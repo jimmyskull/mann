@@ -4,6 +4,7 @@
 #ifndef MANN_H_
 #define MANN_H_
 
+#include <algorithm>
 #include <array>
 #include <istream>
 #include <memory>
@@ -13,8 +14,6 @@
 #include <type_traits>
 #include <utility>
 #include <vector>
-
-#include <iostream>
 
 namespace mann {
 
@@ -26,10 +25,12 @@ struct fst {
 template <typename ValueT = double, unsigned Dim = 2>
 class Point {
  private:
-  using PointType = std::array<ValueT, Dim>;
-  std::unique_ptr<PointType> elements_ = std::make_unique<PointType>();
+  using point_type = std::array<ValueT, Dim>;
+  std::unique_ptr<point_type> elements_ = std::make_unique<point_type>();
 
  public:
+  using const_iterator = typename point_type::const_iterator;
+
   static const unsigned dimension = Dim;
 
   ~Point() = default;
@@ -42,6 +43,12 @@ class Point {
 
   explicit Point(std::istream& is) { is >> *this; }
 
+  explicit Point(std::initializer_list<ValueT> args) {
+    if (args.size() != Dim)
+      throw std::runtime_error("Number of elements and dimensions must match.");
+    std::copy(args.begin(), args.end(), elements_->begin());
+  }
+
   ValueT& operator[](std::size_t index) { return elements_->operator[](index); }
 
   const ValueT& operator[](std::size_t index) const {
@@ -50,12 +57,19 @@ class Point {
 
   const ValueT& at(std::size_t index) const { return elements_->at(index); }
 
-  typename PointType::size_type size() const { return elements_->size(); }
+  typename point_type::size_type size() const { return elements_->size(); }
+
+  bool operator==(const Point& p) const {
+    return std::equal(begin(), end(), p.begin());
+  }
+
+  const_iterator begin() const { return elements_->begin(); }
+  const_iterator end() const { return elements_->end(); }
 
   friend std::istream& operator>>(std::istream& is, Point& p) {
     std::string line;
     if (!getline(is, line)) {
-      std::runtime_error("Empty stream");
+      throw std::runtime_error("Empty stream");
     }
     std::istringstream iss(line);
     for (auto& e : *p.elements_) {
@@ -79,7 +93,7 @@ class Point {
 namespace detail {
 
 template <typename PointT>
-class OrthoRect {
+class Rectangle {
  public:
   template <typename ArrayT>
   void SmallestEnclosingRect(const ArrayT& arr) {
@@ -93,6 +107,9 @@ class OrthoRect {
       upper_right_[i] = r.second->at(i);
     }
   }
+
+  const PointT& lower_left() const { return lower_left_; }
+  const PointT& upper_right() const { return upper_right_; }
 
  private:
   PointT lower_left_;
@@ -116,9 +133,7 @@ class KDTree {
   }
 
  private:
-  void SkeletonTree() {
-    bounds_.SmallestEnclosingRect(points_);
-  }
+  void SkeletonTree() { bounds_.SmallestEnclosingRect(points_); }
 
   unsigned dim() const { return points_.dimension; }
   unsigned bucket_size() const { return bucket_size_; }
@@ -126,7 +141,7 @@ class KDTree {
   const PointsArrayT& points_;
   const unsigned bucket_size_;
   std::unique_ptr<Node> root_;
-  detail::OrthoRect<typename PointsArrayT::value_type> bounds_;
+  detail::Rectangle<typename PointsArrayT::value_type> bounds_;
 };
 
 }  // namespace mann

@@ -1,13 +1,11 @@
-
 #include <catch.hpp>
 
-#include <sstream>
 #include <vector>
 
 #include <mann.h>
 
 static std::istringstream input_points(
-R"(-0.297462	0.176102
+    R"(-0.297462	0.176102
 0.565538	-0.361496
 0.909313	-0.182785
 0.920712	0.478408
@@ -29,30 +27,18 @@ R"(-0.297462	0.176102
 0.0520465	0.896306
 )");
 
-std::istringstream input_queries(
-R"(0.0902484	-0.207129
--0.419567	0.485743
-0.826225	-0.30962
-0.694758	0.987088
--0.410807	-0.465182
--0.836501	0.490184
-0.588289	0.656408
-0.325807	0.38721
--0.532226	-0.727036
--0.52506	-0.853508
-)");
+TEST_CASE("Rectangle", "[Rectangle]") {
+  using Point2d = mann::Point<double, 2>;
+  using Rectangle = mann::detail::Rectangle<Point2d>;
 
-TEST_CASE("KDTree", "[KDTree]") {
-  using mann::Point;
-  using mann::KDTree;
-  using Array = std::vector<Point<double, 2>>;
-  Array points;
+  std::vector<Point2d> points;
 
   while (!input_points.eof())
     if (input_points.peek() != EOF) points.emplace_back(input_points);
 
-  auto tree = KDTree<Array>{points};
+  Rectangle rect;
+  rect.SmallestEnclosingRect(points);
+
+  CHECK(rect.lower_left() == (Point2d{{-0.970662, -0.942415}}));
+  CHECK(rect.upper_right() == (Point2d{{0.927417, 0.986146}}));
 }
-
-
-
