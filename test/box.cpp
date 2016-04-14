@@ -1,6 +1,8 @@
 #include <catch.hpp>
 
+#include <algorithm>
 #include <vector>
+#include <iostream>
 
 #include <mann.h>
 
@@ -27,24 +29,24 @@ static std::istringstream input_points(
 0.0520465	0.896306
 )");
 
-TEST_CASE("Rectangle", "[Rectangle]") {
+TEST_CASE("Box", "[Box]") {
   using Point2d = mann::Point<double, 2>;
-  using Rectangle = mann::detail::Rectangle<Point2d>;
+  using PointVec = std::vector<Point2d>;
+  using Box = mann::Box<PointVec>;
 
-  std::vector<Point2d> points;
+  PointVec points;
 
   while (!input_points.eof())
     if (input_points.peek() != EOF) points.emplace_back(input_points);
 
-  Rectangle rectangle;
-  rectangle.SmallestEnclosingRect(points);
+  Box box(points);
 
-  CHECK(rectangle.lower_left() == (Point2d{{-0.970662, -0.942415}}));
-  CHECK(rectangle.upper_right() == (Point2d{{0.927417, 0.986146}}));
+  CHECK(box.lower_left() == (Point2d{{-0.970662, -0.942415}}));
+  CHECK(box.upper_right() == (Point2d{{0.927417, 0.986146}}));
 
-  unsigned dim;
-  double size;
-  std::tie(dim, size) = rectangle.longest_side();
-  CHECK(dim == 1);
-  CHECK(size == Approx(1.928561));
+  auto sides = box.DimensionLengths();
+  auto max = std::max_element(sides.begin(), sides.end());
+  CHECK((max - sides.begin()) == 1);
+  CHECK(*max == Approx(1.928561));
+  for (auto& e : sides) std::cout << e << std::endl;
 }

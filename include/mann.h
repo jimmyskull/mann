@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <array>
 #include <istream>
+#include <iterator>
 #include <memory>
 #include <numeric>
 #include <sstream>
@@ -92,49 +93,53 @@ class Point {
   }
 };
 
-namespace detail {
+// Orthotope or hyperrectangle
+template <typename PointsT>
+class Box {
+ private:
+  using points_type = PointsT;
+  using point_type = typename PointsT::value_type;
+  using value_type = typename point_type::value_type;
 
-template <typename PointT>
-class Rectangle {
  public:
-  template <typename ArrayT>
-  void SmallestEnclosingRect(const ArrayT& arr) {
-    if (arr.empty()) return;
-    auto dim = arr[0].size();
-    for (decltype(dim) i = 0; i < dim; ++i) {
-      auto r = std::minmax_element(
-          arr.begin(), arr.end(),
-          [i](const auto& a, const auto& b) -> bool { return a[i] < b[i]; });
-      lower_left_[i] = r.first->at(i);
-      upper_right_[i] = r.second->at(i);
-    }
+  Box(const points_type& points) : points_(points) {
+    SmallestEnclosingBounds();
   }
 
-  std::tuple<unsigned, typename PointT::value_type>
-  longest_side() const {
-    using ValueT = typename PointT::value_type;
-    auto diff = [&](unsigned dim) -> ValueT {
-      return std::abs(lower_left()[dim] - upper_right()[dim]);
-    };
-    ValueT largest = diff(0);
-    unsigned largest_dim = 0;
-
-    for (unsigned d = 0; d < lower_left().dimension; ++d) {
-      ValueT candidate = diff(d);
-      if (candidate > largest) {
-        largest = candidate;
-        largest_dim = d;
-      }
-    }
-    return std::make_tuple(largest_dim, largest);
+  auto DimensionLengths() const {
+    std::vector<value_type> result;
+    result.reserve(lower_left().size());
+    std::transform(lower_left().begin(), lower_left().end(),
+                   upper_right().begin(), std::back_inserter(result),
+                   [&](const auto& a, const auto& b) -> value_type {
+                     return std::abs(a - b);
+                   });
+    return result;
   }
 
-  const PointT& lower_left() const { return lower_left_; }
-  const PointT& upper_right() const { return upper_right_; }
+  const point_type& lower_left() const { return lower_left_; }
+  const point_type& upper_right() const { return upper_right_; }
 
  private:
-  PointT lower_left_;
-  PointT upper_right_;
+  void SmallestEnclosingBounds() {
+    auto kDim = points_[0].size();
+    for (decltype(kDim) dim = 0; dim < kDim; ++dim)
+      UpdateDimensionBounds(dim);
+  }
+
+  void UpdateDimensionBounds(unsigned dim) {
+    auto r = std::minmax_element(points_.begin(), points_.end(),
+                                 [dim](const auto& a, const auto& b) -> bool {
+                                   return a[dim] < b[dim];
+                                 });
+    lower_left_[dim] = r.first->at(dim);
+    upper_right_[dim] = r.second->at(dim);
+  }
+
+ private:
+  point_type lower_left_;
+  point_type upper_right_;
+  const points_type& points_;
 };
 
 class KDTreeNode {};
@@ -142,8 +147,6 @@ class KDTreeNode {};
 class KDTreeNodeLeaf : public KDTreeNode {};
 
 class KDTreeNodeInternal : public KDTreeNode {};
-
-}  // namespace detail
 
 // Space split policies
 namespace split {
@@ -158,7 +161,7 @@ struct Split {
 template <typename PointsT, typename BoundsT, typename ValueT>
 void SlidingMidpoint(const PointsT& points, const BoundsT& bounds,
                      ValueT* result, double epsilon = 1e-3) {
-//  std::minmax_element(
+  //  std::minmax_element(
 }
 
 }  // namespace split
@@ -166,8 +169,7 @@ void SlidingMidpoint(const PointsT& points, const BoundsT& bounds,
 template <typename PointsArrayT>
 class KDTree {
  private:
-  using Node = detail::KDTreeNode;
-  using Rectangle = detail::Rectangle<typename PointsArrayT::value_type>;
+  using Node = KDTreeNode;
 
  public:
   KDTree(const PointsArrayT& points, unsigned bucket_size = 1)
@@ -177,8 +179,8 @@ class KDTree {
 
  private:
   void BuildTree() {
-    Rectangle bounds;
-    bounds.SmallestEnclosingRect(points_);
+    // Rectangle bounds;
+    // bounds.SmallestEnclosingRect(points_);
     root_ = BuildNode();
   }
 
