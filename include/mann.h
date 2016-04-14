@@ -12,6 +12,7 @@
 #include <sstream>
 #include <string>
 #include <type_traits>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -30,6 +31,7 @@ class Point {
 
  public:
   using const_iterator = typename point_type::const_iterator;
+  using value_type = ValueT;
 
   static const unsigned dimension = Dim;
 
@@ -108,6 +110,25 @@ class Rectangle {
     }
   }
 
+  std::tuple<unsigned, typename PointT::value_type>
+  longest_side() const {
+    using ValueT = typename PointT::value_type;
+    auto diff = [&](unsigned dim) -> ValueT {
+      return std::abs(lower_left()[dim] - upper_right()[dim]);
+    };
+    ValueT largest = diff(0);
+    unsigned largest_dim = 0;
+
+    for (unsigned d = 0; d < lower_left().dimension; ++d) {
+      ValueT candidate = diff(d);
+      if (candidate > largest) {
+        largest = candidate;
+        largest_dim = d;
+      }
+    }
+    return std::make_tuple(largest_dim, largest);
+  }
+
   const PointT& lower_left() const { return lower_left_; }
   const PointT& upper_right() const { return upper_right_; }
 
@@ -118,22 +139,50 @@ class Rectangle {
 
 class KDTreeNode {};
 
+class KDTreeNodeLeaf : public KDTreeNode {};
+
+class KDTreeNodeInternal : public KDTreeNode {};
+
 }  // namespace detail
+
+// Space split policies
+namespace split {
+
+template <typename ValueT>
+struct Split {
+  unsigned dimension_index;
+  ValueT threshold_value;
+  unsigned number_of_points_in_left_side;
+};
+
+template <typename PointsT, typename BoundsT, typename ValueT>
+void SlidingMidpoint(const PointsT& points, const BoundsT& bounds,
+                     ValueT* result, double epsilon = 1e-3) {
+//  std::minmax_element(
+}
+
+}  // namespace split
 
 template <typename PointsArrayT>
 class KDTree {
  private:
   using Node = detail::KDTreeNode;
+  using Rectangle = detail::Rectangle<typename PointsArrayT::value_type>;
 
  public:
   KDTree(const PointsArrayT& points, unsigned bucket_size = 1)
       : points_(points), bucket_size_(bucket_size) {
-    if (points_.empty()) return;
-    SkeletonTree();
+    BuildTree();
   }
 
  private:
-  void SkeletonTree() { bounds_.SmallestEnclosingRect(points_); }
+  void BuildTree() {
+    Rectangle bounds;
+    bounds.SmallestEnclosingRect(points_);
+    root_ = BuildNode();
+  }
+
+  std::unique_ptr<Node> BuildNode() {}
 
   unsigned dim() const { return points_.dimension; }
   unsigned bucket_size() const { return bucket_size_; }
@@ -141,7 +190,6 @@ class KDTree {
   const PointsArrayT& points_;
   const unsigned bucket_size_;
   std::unique_ptr<Node> root_;
-  detail::Rectangle<typename PointsArrayT::value_type> bounds_;
 };
 
 }  // namespace mann

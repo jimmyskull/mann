@@ -51,7 +51,7 @@ TEST_CASE("KDTree", "[KDTree]") {
   while (!input_points.eof())
     if (input_points.peek() != EOF) points.emplace_back(input_points);
 
-  auto tree = KDTree<Array>{points};
+ // auto tree = KDTree<Array>{points};
 }
 
 

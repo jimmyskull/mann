@@ -36,9 +36,15 @@ TEST_CASE("Rectangle", "[Rectangle]") {
   while (!input_points.eof())
     if (input_points.peek() != EOF) points.emplace_back(input_points);
 
-  Rectangle rect;
-  rect.SmallestEnclosingRect(points);
+  Rectangle rectangle;
+  rectangle.SmallestEnclosingRect(points);
 
-  CHECK(rect.lower_left() == (Point2d{{-0.970662, -0.942415}}));
-  CHECK(rect.upper_right() == (Point2d{{0.927417, 0.986146}}));
+  CHECK(rectangle.lower_left() == (Point2d{{-0.970662, -0.942415}}));
+  CHECK(rectangle.upper_right() == (Point2d{{0.927417, 0.986146}}));
+
+  unsigned dim;
+  double size;
+  std::tie(dim, size) = rectangle.longest_side();
+  CHECK(dim == 1);
+  CHECK(size == Approx(1.928561));
 }
