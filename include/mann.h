@@ -19,53 +19,21 @@
 
 namespace mann {
 
-// Orthotope or hyperrectangle
-template <typename PointsT>
-class Box {
- private:
-  using points_type = PointsT;
-  using point_type = typename PointsT::value_type;
-  using value_type = typename point_type::value_type;
-
- public:
-  Box(const points_type& points) : points_(points) {
-    SmallestEnclosingBounds();
-  }
-
-  auto DimensionLengths() const {
-    std::vector<value_type> result;
-    result.reserve(lower_left().size());
-    std::transform(lower_left().begin(), lower_left().end(),
-                   upper_right().begin(), std::back_inserter(result),
-                   [&](const auto& a, const auto& b) -> value_type {
-                     return std::abs(a - b);
-                   });
-    return result;
-  }
-
-  const point_type& lower_left() const { return lower_left_; }
-  const point_type& upper_right() const { return upper_right_; }
-
- private:
-  void SmallestEnclosingBounds() {
-    auto kDim = points_[0].size();
-    for (decltype(kDim) dim = 0; dim < kDim; ++dim) UpdateDimensionBounds(dim);
-  }
-
-  void UpdateDimensionBounds(unsigned dim) {
-    auto r = std::minmax_element(points_.begin(), points_.end(),
+template <typename RandomAccessIterator>
+auto SmallestEnclosingBounds(RandomAccessIterator first,
+                             RandomAccessIterator last) {
+  auto kDim = first->size();
+  typename decltype(first)::value_type lower_left, upper_right;
+  for (decltype(kDim) dim = 0; dim < kDim; ++dim) {
+    auto r = std::minmax_element(first, last,
                                  [dim](const auto& a, const auto& b) -> bool {
                                    return a[dim] < b[dim];
                                  });
-    lower_left_[dim] = r.first->at(dim);
-    upper_right_[dim] = r.second->at(dim);
+    lower_left[dim] = r.first->at(dim);
+    upper_right[dim] = r.second->at(dim);
   }
-
- private:
-  point_type lower_left_;
-  point_type upper_right_;
-  const points_type& points_;
-};
+  return std::make_pair(lower_left, upper_right);
+}
 
 class KDTreeNode {};
 
