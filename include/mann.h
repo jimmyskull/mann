@@ -160,12 +160,13 @@ class SlidingMidpoint {
       dimensions_.pop_back();
 
       if (dim.first >= threshold) {
-        std::cout << "Top:";
-        std::cout << '<' << dim.first << ", " << dim.second << '>' << std::endl;
+        // std::cout << "Top:";
+        // std::cout << '<' << dim.first << ", " << dim.second << '>' <<
+        // std::endl;
         auto range = Box::DimensionRange(first, last, dim.second);
         const auto interval = std::abs(range.first - range.second);
-        std::cout << "Range: <" << range.first << ", " << range.second
-                  << "> = " << interval << std::endl;
+        // std::cout << "Range: <" << range.first << ", " << range.second
+        //          << "> = " << interval << std::endl;
         if (interval > max_interval) {
           max_interval = interval;
           split.dimension_index = dim.second;
@@ -193,7 +194,7 @@ class SlidingMidpoint {
     auto middle1 = middle2;
     while (first != middle1 && is_lhs(*(middle1 - 1))) {
       --middle1;
-      std::cerr << "Pos: " << std::distance(first, middle1) << std::endl;
+      // std::cerr << "Pos: " << std::distance(first, middle1) << std::endl;
     }
 
     const auto N = std::distance(first, last);
@@ -223,34 +224,100 @@ class SlidingMidpoint {
   std::vector<std::pair<ValueT, unsigned>> dimensions_;
 };
 
-template <typename PointsArrayT>
+template <typename RandomAccessIterator>
 class KDTree {
- private:
-  class KDTreeNode {};
+ public:
+  using point_iterator = RandomAccessIterator;
+  using point_type = typename point_iterator::value_type;
+  using value_type = typename point_type::value_type;
 
-  using Node = KDTreeNode;
+ private:
+  using Hyperplane = Hyperplane<point_iterator, value_type>;
+  using Box = std::pair<point_type, point_type>;
+
+  class Node {};
+
+  // An internal node contains a hyperplane and two children
+  class InternalNode : public Node {
+   public:
+    InternalNode(const Hyperplane& plane, const Box& box,
+                 std::shared_ptr<Node> left, std::shared_ptr<Node> right)
+        : Node(), plane_(plane), box_(box), left_(left), right_(right) {}
+
+   private:
+    const Hyperplane plane_;
+    const Box box_;
+    std::shared_ptr<Node> left_;
+    std::shared_ptr<Node> right_;
+  };
+
+  class LeafNode : public Node {
+   public:
+    LeafNode(point_iterator begin, point_iterator end)
+        : Node(), begin_(begin), end_(end) {}
+
+    static auto Sentinel() {
+      static std::shared_ptr<LeafNode> instance =
+          std::make_shared<LeafNode>(point_iterator{}, point_iterator{});
+      return instance;
+    }
+
+   private:
+    point_iterator begin_;
+    point_iterator end_;
+  };
 
  public:
-  KDTree(const PointsArrayT& points, unsigned bucket_size = 1)
-      : points_(points), bucket_size_(bucket_size) {
+  KDTree(point_iterator first, point_iterator last, unsigned bucket_size = 1)
+      : first_(first), last_(last), bucket_size_(bucket_size) {
     BuildTree();
   }
 
  private:
   void BuildTree() {
-    // Rectangle bounds;
-    // bounds.SmallestEnclosingRect(points_);
-    root_ = BuildNode();
+    auto box = mann::Box::Fit(first(), last());
+
+    root_ = BuildNode(first(), last(), box);
   }
 
-  std::unique_ptr<Node> BuildNode() {}
+  std::shared_ptr<Node> BuildNode(point_iterator left, point_iterator right,
+                                  Box& box) {
+    const auto n = std::distance(left, right);
+    if (n <= bucket_size()) {
+      if (n <= 0) {
+        std::cerr << "Zee end (leaf).\n";
+        return LeafNode::Sentinel();
+      } else {
+        std::cerr << "Zee end (bucket).\n";
+        return std::make_shared<LeafNode>(left, right);
+      }
+    }
+    // Split node
+    auto splitter = mann::SlidingMidpoint<value_type>();
+    auto plane = Hyperplane();
 
-  unsigned dim() const { return points_.dimension; }
+    splitter(left, right, box, plane);
+
+    std::swap(box.second[plane.dimension_index], plane.threshold);
+    auto left_node = BuildNode(left, plane.middle, box);
+    std::swap(box.second[plane.dimension_index], plane.threshold);
+
+    std::swap(box.first[plane.dimension_index], plane.threshold);
+    auto right_node = BuildNode(plane.middle, right, box);
+    std::swap(box.first[plane.dimension_index], plane.threshold);
+
+    return std::make_shared<InternalNode>(plane, box, left_node, right_node);
+  }
+
+  point_iterator first() { return first_; }
+  point_iterator last() { return last_; }
+
   unsigned bucket_size() const { return bucket_size_; }
 
-  const PointsArrayT& points_;
+  point_iterator first_;
+  point_iterator last_;
   const unsigned bucket_size_;
-  std::unique_ptr<Node> root_;
+  std::shared_ptr<Node> root_;
 };
 
 }  // namespace mann
