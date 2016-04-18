@@ -25,11 +25,22 @@ TEST_CASE("SlidingMidpoint", "[Box]") {
   using T = typename Point::value_type;
 
   auto splitter = mann::SlidingMidpoint<T>();
-  auto plane = mann::Hyperplane<T>();
+  auto plane = mann::Hyperplane<typename decltype(points)::iterator, T>();
 
   splitter(points.begin(), points.end(), box, plane);
 
-
+  // std::cout << plane << std::endl;
 }
 
+TEST_CASE("SlidingMidpoint repeated points", "[Box]") {
+  auto points = test::Repeated::points();
+  auto box = mann::Box::Fit(points.begin(), points.end());
 
+  using Point = typename decltype(points)::value_type;
+  using T = typename Point::value_type;
+
+  auto splitter = mann::SlidingMidpoint<T>();
+  auto plane = mann::Hyperplane<typename decltype(points)::iterator, T>();
+
+  splitter(points.begin(), points.end(), box, plane);
+}

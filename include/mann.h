@@ -113,11 +113,18 @@ class Box {
   }
 };
 
-template <typename ValueT>
+template <typename PointsIteratorT, typename ValueT>
 struct Hyperplane {
   unsigned dimension_index;
   ValueT threshold;
-  unsigned points_on_lhs;
+  PointsIteratorT middle;
+
+  friend std::ostream& operator<<(std::ostream& os, const Hyperplane& hp) {
+    os << "<dim=" << hp.dimension_index;
+    os << ", threshold=" << hp.threshold;
+    os << ", middle=" << *hp.middle << ">";
+    return os;
+  }
 };
 
 // Not thread safe
@@ -128,7 +135,8 @@ class SlidingMidpoint {
 
   template <typename RandomAccessIterator, typename BoundsT>
   void operator()(RandomAccessIterator first, RandomAccessIterator last,
-                  const BoundsT& bounds, Hyperplane<ValueT>& split) {
+                  const BoundsT& bounds,
+                  Hyperplane<RandomAccessIterator, ValueT>& split) {
     dimensions_.resize(bounds.first.size());
     std::transform(
         bounds.first.begin(), bounds.first.end(), bounds.second.begin(),
@@ -142,7 +150,8 @@ class SlidingMidpoint {
 
     const auto threshold = (1.0 - kEpsilon) * dimensions_.front().first;
 
-    auto box = Box::Fit(first, last);
+    ValueT max_interval = 0.0;
+    typename decltype(dimensions_)::value_type dimension;
 
     while (!dimensions_.empty()) {
       // Process the next largest dimension information
@@ -154,14 +163,58 @@ class SlidingMidpoint {
         std::cout << "Top:";
         std::cout << '<' << dim.first << ", " << dim.second << '>' << std::endl;
         auto range = Box::DimensionRange(first, last, dim.second);
+        const auto interval = std::abs(range.first - range.second);
         std::cout << "Range: <" << range.first << ", " << range.second
-                  << "> = " << std::abs(range.first - range.second)
-                  << std::endl;
-        // this range should be equal to dim.first so, I think that might
-        // be interesting to update the fucking box once the dimension
-        // changes.
+                  << "> = " << interval << std::endl;
+        if (interval > max_interval) {
+          max_interval = interval;
+          split.dimension_index = dim.second;
+          dimension = dim;
+        }
       }
     }
+
+    const auto min = bounds.first[split.dimension_index];
+    const auto max = bounds.second[split.dimension_index];
+
+    split.threshold = (min + max) / 2.0;
+    const bool left_of_min = split.threshold < min;
+    const bool right_of_max = split.threshold > max;
+    split.threshold = std::max(split.threshold, min);
+    split.threshold = std::min(split.threshold, max);
+
+    // True if |p| is at the left-hand side of the hyperplane
+    auto is_lhs = [&split](const auto& p) -> bool {
+      return p[split.dimension_index] <= split.threshold;
+    };
+
+    const auto middle2 = std::partition(first, last, is_lhs);
+
+    auto middle1 = middle2;
+    while (first != middle1 && is_lhs(*(middle1 - 1))) {
+      --middle1;
+      std::cerr << "Pos: " << std::distance(first, middle1) << std::endl;
+    }
+
+    const auto N = std::distance(first, last);
+    const auto half = N / 2;
+
+    unsigned middle1_pos = std::distance(first, middle1);
+    unsigned middle2_pos = std::distance(first, middle2);
+    unsigned points_on_lhs;
+
+    if (left_of_min)
+      points_on_lhs = 1;
+    else if (right_of_max)
+      points_on_lhs = N - 1;
+    else if (middle1_pos > half)
+      points_on_lhs = middle1_pos;
+    else if (middle2_pos < half)
+      points_on_lhs = middle2_pos;
+    else
+      points_on_lhs = half;
+
+    split.middle = first + points_on_lhs;
   }
 
  private:
