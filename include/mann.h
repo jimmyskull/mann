@@ -17,51 +17,164 @@
 #include <utility>
 #include <vector>
 
+#include <iostream>  // TODO : remove
+#include "../lib/util.h"
+
 namespace mann {
 
-template <typename RandomAccessIterator>
-auto SmallestEnclosingBounds(RandomAccessIterator first,
-                             RandomAccessIterator last) {
-  auto kDim = first->size();
-  typename decltype(first)::value_type lower_left, upper_right;
-  for (decltype(kDim) dim = 0; dim < kDim; ++dim) {
-    auto r = std::minmax_element(first, last,
-                                 [dim](const auto& a, const auto& b) -> bool {
-                                   return a[dim] < b[dim];
-                                 });
-    lower_left[dim] = r.first->at(dim);
-    upper_right[dim] = r.second->at(dim);
-  }
-  return std::make_pair(lower_left, upper_right);
-}
+namespace detail {
 
-class KDTreeNode {};
-
-class KDTreeNodeLeaf : public KDTreeNode {};
-
-class KDTreeNodeInternal : public KDTreeNode {};
-
-// Space split policies
-namespace split {
-
-template <typename ValueT>
-struct Split {
-  unsigned dimension_index;
-  ValueT threshold_value;
-  unsigned number_of_points_in_left_side;
+template <typename PointT, typename ValueT = typename PointT::value_type>
+struct PointHelper {
+  static_assert(sizeof(ValueT) == -1,
+                "A Point must be either a vector or an array.");
 };
 
-template <typename PointsT, typename BoundsT, typename ValueT>
-void SlidingMidpoint(const PointsT& points, const BoundsT& bounds,
-                     ValueT* result, double epsilon = 1e-3) {
-  //  std::minmax_element(
-}
+template <typename ValueT, std::size_t Dim>
+struct PointHelper<std::array<ValueT, Dim>, ValueT> {
+  static std::array<ValueT, Dim> Create(std::size_t M) {
+    if (Dim != M)
+      std::runtime_error{"Inconsistent size for a fixed-length array."};
+    return {};
+  }
 
-}  // namespace split
+  using RefVector = std::vector<std::array<ValueT, Dim>>;
+  using ObjVector = std::vector<std::array<ValueT, Dim>>;
+
+  static RefVector ToRefVector(typename ObjVector::const_iterator first,
+                               typename ObjVector::const_iterator last) {
+    return RefVector(first, last);
+  }
+};
+
+template <typename ValueT>
+struct PointHelper<std::vector<ValueT>, ValueT> {
+  static std::vector<ValueT> Create(std::size_t N) {
+    return std::vector<ValueT>(N);
+  }
+
+  using RefVector =
+      std::vector<std::reference_wrapper<const std::vector<ValueT>>>;
+  using ObjVector = std::vector<std::vector<ValueT>>;
+
+  static RefVector ToRefVector(typename ObjVector::const_iterator first,
+                               typename ObjVector::const_iterator last) {
+    RefVector result;
+    result.reserve(std::distance(first, last));
+    std::transform(first, last, std::back_inserter(result),
+                   [](const auto& vec) { return std::cref(vec); });
+    return result;
+  }
+};
+
+}  // namespace detail
+
+class Box {
+ public:
+  // Returns a pair<min, max> of the range of values in |dimension|
+  template <typename RandomAccessIterator>
+  static auto DimensionRange(RandomAccessIterator first,
+                             RandomAccessIterator last, unsigned dimension) {
+    auto r = std::minmax_element(
+        first, last, [dimension](const auto& a, const auto& b) -> bool {
+          return a[dimension] < b[dimension];
+        });
+    return std::make_pair(r.first->at(dimension), r.second->at(dimension));
+  }
+
+  // Returns vector<> with the length of each |box| edge
+  template <typename T>
+  static auto Lengths(const std::pair<T, T>& box) {
+    std::vector<typename T::value_type> lengths;
+    lengths.reserve(box.first.size());
+    std::transform(box.first.begin(), box.first.end(), box.second.begin(),
+                   std::back_inserter(lengths),
+                   [](const auto& a, const auto& b) { return a + b; });
+    return lengths;
+  }
+
+  // Returns a pair<lower left point, upper right point> that determines the
+  // smallest box that fits a list of points.
+  template <typename RandomAccessIterator>
+  static auto Fit(RandomAccessIterator first, RandomAccessIterator last) {
+    using Helper =
+        detail::PointHelper<typename RandomAccessIterator::value_type>;
+
+    auto kDim = first->size();
+    auto lower_left = Helper::Create(kDim);
+    auto upper_right = Helper::Create(kDim);
+
+    for (decltype(kDim) dim = 0; dim < kDim; ++dim) {
+      auto range = DimensionRange(first, last, dim);
+      lower_left[dim] = range.first;
+      upper_right[dim] = range.second;
+    }
+    return std::make_pair(lower_left, upper_right);
+  }
+};
+
+template <typename ValueT>
+struct Hyperplane {
+  unsigned dimension_index;
+  ValueT threshold;
+  unsigned points_on_lhs;
+};
+
+// Not thread safe
+template <typename ValueT>
+class SlidingMidpoint {
+ public:
+  SlidingMidpoint(ValueT epsilon = 1e-3) : kEpsilon(epsilon) {}
+
+  template <typename RandomAccessIterator, typename BoundsT>
+  void operator()(RandomAccessIterator first, RandomAccessIterator last,
+                  const BoundsT& bounds, Hyperplane<ValueT>& split) {
+    dimensions_.resize(bounds.first.size());
+    std::transform(
+        bounds.first.begin(), bounds.first.end(), bounds.second.begin(),
+        dimensions_.begin(), [&bounds](const auto& a, const auto& b) {
+          return std::make_pair(std::abs(a - b),
+                                std::distance(bounds.first.begin(), &a));
+        });
+    std::make_heap(
+        dimensions_.begin(), dimensions_.end(),
+        [](const auto& a, const auto& b) -> bool { return a.first < b.first; });
+
+    const auto threshold = (1.0 - kEpsilon) * dimensions_.front().first;
+
+    auto box = Box::Fit(first, last);
+
+    while (!dimensions_.empty()) {
+      // Process the next largest dimension information
+      auto dim = dimensions_.front();
+      std::pop_heap(dimensions_.begin(), dimensions_.end());
+      dimensions_.pop_back();
+
+      if (dim.first >= threshold) {
+        std::cout << "Top:";
+        std::cout << '<' << dim.first << ", " << dim.second << '>' << std::endl;
+        auto range = Box::DimensionRange(first, last, dim.second);
+        std::cout << "Range: <" << range.first << ", " << range.second
+                  << "> = " << std::abs(range.first - range.second)
+                  << std::endl;
+        // this range should be equal to dim.first so, I think that might
+        // be interesting to update the fucking box once the dimension
+        // changes.
+      }
+    }
+  }
+
+ private:
+  const ValueT kEpsilon;
+  // Pair of dimension lenght and the dimension index
+  std::vector<std::pair<ValueT, unsigned>> dimensions_;
+};
 
 template <typename PointsArrayT>
 class KDTree {
  private:
+  class KDTreeNode {};
+
   using Node = KDTreeNode;
 
  public:
